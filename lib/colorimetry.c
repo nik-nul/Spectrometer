@@ -1,5 +1,6 @@
 #include "colorimetry.h"
 #include "csv.h"
+#include "ref_data.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +22,7 @@ typedef struct {
 } RefData;
 
 static RefData g_ref;
+static int g_use_external_refs = 0;
 
 static int parse_csv_numbers(char *line, double *out, int max) {
     int count = 0;
@@ -40,6 +42,25 @@ static int parse_csv_numbers(char *line, double *out, int max) {
         p = end;
     }
     return count;
+}
+
+static int read_line_buffer(const unsigned char *data, size_t len,
+                            size_t *offset, char *line, size_t cap) {
+    if (!data || !offset || !line || cap == 0) return 0;
+    if (*offset >= len) return 0;
+
+    size_t i = *offset;
+    size_t start = i;
+    while (i < len && data[i] != '\n') i++;
+    size_t line_len = i - start;
+    if (line_len >= cap) line_len = cap - 1;
+    memcpy(line, data + start, line_len);
+    line[line_len] = '\0';
+    if (line_len > 0 && line[line_len - 1] == '\r') {
+        line[line_len - 1] = '\0';
+    }
+    *offset = (i < len && data[i] == '\n') ? i + 1 : i;
+    return 1;
 }
 
 static void resample_linear(const double *src_wl, const double *src_val,
@@ -71,12 +92,30 @@ static void resample_linear(const double *src_wl, const double *src_val,
 }
 
 static int load_cmf(void) {
-    FILE *fp = fopen("ref/CIE_xyz_1931_2deg.csv", "r");
-    if (!fp) return -1;
+    FILE *fp = NULL;
+    const unsigned char *data = NULL;
+    size_t data_len = 0;
+    size_t offset = 0;
+
+    if (g_use_external_refs) {
+        fp = fopen("ref/CIE_xyz_1931_2deg.csv", "r");
+        if (!fp) return -1;
+    } else {
+        data = _binary_ref_CIE_xyz_1931_2deg_csv_start;
+        data_len = (size_t)(_binary_ref_CIE_xyz_1931_2deg_csv_end
+                            - _binary_ref_CIE_xyz_1931_2deg_csv_start);
+        if (data_len == 0) return -1;
+    }
 
     char line[256];
     int filled = 0;
-    while (fgets(line, sizeof(line), fp)) {
+    for (;;) {
+        if (g_use_external_refs) {
+            if (!fgets(line, sizeof(line), fp)) break;
+        } else {
+            if (!read_line_buffer(data, data_len, &offset,
+                                  line, sizeof(line))) break;
+        }
         int wl = 0;
         double x = 0.0, y = 0.0, z = 0.0;
         if (sscanf(line, "%d,%lf,%lf,%lf", &wl, &x, &y, &z) == 4) {
@@ -90,13 +129,25 @@ static int load_cmf(void) {
         }
     }
 
-    fclose(fp);
+    if (fp) fclose(fp);
     return filled > 0 ? 0 : -1;
 }
 
 static int load_cri_reflectance(void) {
-    FILE *fp = fopen("ref/CIE_srf_cri.csv", "r");
-    if (!fp) return -1;
+    FILE *fp = NULL;
+    const unsigned char *data = NULL;
+    size_t data_len = 0;
+    size_t offset = 0;
+
+    if (g_use_external_refs) {
+        fp = fopen("ref/CIE_srf_cri.csv", "r");
+        if (!fp) return -1;
+    } else {
+        data = _binary_ref_CIE_srf_cri_csv_start;
+        data_len = (size_t)(_binary_ref_CIE_srf_cri_csv_end
+                            - _binary_ref_CIE_srf_cri_csv_start);
+        if (data_len == 0) return -1;
+    }
 
     double *raw_wl = NULL;
     double *raw_r[CRI_SAMPLE_COUNT] = {0};
@@ -105,7 +156,13 @@ static int load_cri_reflectance(void) {
 
     char line[512];
     int alloc_failed = 0;
-    while (fgets(line, sizeof(line), fp)) {
+    while (1) {
+        if (g_use_external_refs) {
+            if (!fgets(line, sizeof(line), fp)) break;
+        } else {
+            if (!read_line_buffer(data, data_len, &offset,
+                                  line, sizeof(line))) break;
+        }
         double nums[CRI_SAMPLE_COUNT + 1];
         int n = parse_csv_numbers(line, nums, CRI_SAMPLE_COUNT + 1);
         if (n < CRI_SAMPLE_COUNT + 1) continue;
@@ -133,7 +190,7 @@ static int load_cri_reflectance(void) {
         count++;
     }
 
-    fclose(fp);
+    if (fp) fclose(fp);
 
     if (alloc_failed || count <= 1) {
         free(raw_wl);
@@ -152,8 +209,20 @@ static int load_cri_reflectance(void) {
 }
 
 static int load_s_data(void) {
-    FILE *fp = fopen("ref/S.csv", "r");
-    if (!fp) return -1;
+    FILE *fp = NULL;
+    const unsigned char *data = NULL;
+    size_t data_len = 0;
+    size_t offset = 0;
+
+    if (g_use_external_refs) {
+        fp = fopen("ref/S.csv", "r");
+        if (!fp) return -1;
+    } else {
+        data = _binary_ref_S_csv_start;
+        data_len = (size_t)(_binary_ref_S_csv_end
+                            - _binary_ref_S_csv_start);
+        if (data_len == 0) return -1;
+    }
 
     double *raw_wl = NULL;
     double *raw_s0 = NULL;
@@ -164,7 +233,13 @@ static int load_s_data(void) {
 
     char line[256];
     int alloc_failed = 0;
-    while (fgets(line, sizeof(line), fp)) {
+    while (1) {
+        if (g_use_external_refs) {
+            if (!fgets(line, sizeof(line), fp)) break;
+        } else {
+            if (!read_line_buffer(data, data_len, &offset,
+                                  line, sizeof(line))) break;
+        }
         double nums[4];
         int n = parse_csv_numbers(line, nums, 4);
         if (n < 4) continue;
@@ -197,7 +272,7 @@ static int load_s_data(void) {
         count++;
     }
 
-    fclose(fp);
+    if (fp) fclose(fp);
 
     if (alloc_failed || count <= 1) {
         free(raw_wl);
@@ -575,4 +650,9 @@ void colorimetry_print_result(const CRIResult *res) {
                    i == res->ri_count - 1 ? "\n" : " ");
         }
     }
+}
+
+void colorimetry_set_use_external_refs(int use_external) {
+    g_use_external_refs = use_external ? 1 : 0;
+    g_ref.loaded = 0;
 }

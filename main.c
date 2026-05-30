@@ -48,6 +48,7 @@ static void print_usage(const char *prog) {
     fprintf(stderr, "  -s            Enable headless mode (no SDL)\n");
     fprintf(stderr, "  -l <file>     Enable CSV logging (append to file)\n");
     fprintf(stderr, "  -R <file>     Compute CRI/CCT from spectrum CSV and exit\n");
+    fprintf(stderr, "  -F            Use external ref CSV files (ref/*.csv)\n");
     fprintf(stderr, "  -T            Disable CCT/Ra overlay on SDL\n");
     fprintf(stderr, "  -D <px>       Dest graph width (default 1920)\n");
     fprintf(stderr, "  -H <px>       Dest graph height (default 1080)\n");
@@ -154,7 +155,6 @@ static int prompt_calibration_points(const SpectrometerContext *ctx,
 static int load_and_apply_calibration(const char *path,
                                       SpectrometerContext *ctx) {
     if (!path || !ctx) return -1;
-    if (access(path, R_OK) != 0) return -1;
 
     CalibrationPoint points[64];
     int count = 0;
@@ -191,6 +191,7 @@ int main(int argc, char **argv) {
     const char *csv_log = NULL;
     const char *cri_csv_input = NULL;
     int show_colorimetry = 1;
+    int use_external_refs = 0;
     int cap_width = 1920, cap_height = 1080;
     int exposure = 201;
     int exposure_step = 100;
@@ -206,7 +207,7 @@ int main(int argc, char **argv) {
     spec_init_config(&cfg);
 
     int opt;
-    while ((opt = getopt(argc, argv, "d:i:o:w:h:e:E:g:GX:x:Y:y:f:u:v:n:m:rcpD:H:sl:R:T?CK:N")) != -1) {
+    while ((opt = getopt(argc, argv, "d:i:o:w:h:e:E:g:GX:x:Y:y:f:u:v:n:m:rcpD:H:sl:R:FT?CK:N")) != -1) {
         switch (opt) {
             case 'd': v4l2_device = optarg; break;
             case 'i': image_file = optarg; break;
@@ -232,6 +233,7 @@ int main(int argc, char **argv) {
             case 's': show_sdl = 0; break;
             case 'l': csv_log = optarg; break;
             case 'R': cri_csv_input = optarg; break;
+            case 'F': use_external_refs = 1; break;
             case 'T': show_colorimetry = 0; break;
             case 'D': cfg.dest_width = atoi(optarg); break;
             case 'H': cfg.dest_height = atoi(optarg); break;
@@ -242,6 +244,8 @@ int main(int argc, char **argv) {
             default:  print_usage(argv[0]); return 1;
         }
     }
+
+    colorimetry_set_use_external_refs(use_external_refs);
 
     if (calibration_mode && !show_sdl) {
         fprintf(stderr, "Calibration mode requires SDL display, enabling SDL.\n");

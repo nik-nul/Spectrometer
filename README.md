@@ -82,6 +82,7 @@ Options:
   -s            Enable headless mode (no SDL)
   -l <file>     Enable CSV logging (append to file)
   -R <file>     Compute CRI/CCT from spectrum CSV and exit
+  -F            Use external ref CSV files (ref/*.csv)
   -T            Disable CCT/Ra overlay on SDL
   -D <px>       Dest graph width (default 1920)
   -H <px>       Dest graph height (default 1080)
@@ -122,6 +123,8 @@ Options:
 The SDL overlay shows CCT and Ra by default. Update rate is controlled by
 macros in [output/sdl_display.h](output/sdl_display.h). The full method and
 tables are documented in [colorimetry.md](colorimetry.md).
+By default, the reference CSV tables are embedded in the binary; use `-F`
+to read them from `ref/` instead.
 
 ## Architecture
 
@@ -161,6 +164,7 @@ points 7
 ```
 
 The calibration maps pixel columns to wavelengths via `nm(pixel) = nm_start + pixel * nm_per_x`.
+If `calibration.txt` is missing, the embedded calibration table is used.
 
 ## Notes
 

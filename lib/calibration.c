@@ -1,8 +1,34 @@
 #include "calibration.h"
+#include "ref_data.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+
+static int read_line_buffer(const unsigned char *data, size_t len,
+                            size_t *offset, char *line, size_t cap) {
+    if (!data || !offset || !line || cap == 0) return 0;
+    if (*offset >= len) return 0;
+
+    size_t i = *offset;
+    size_t start = i;
+    while (i < len && data[i] != '\n') i++;
+    size_t line_len = i - start;
+    if (line_len >= cap) line_len = cap - 1;
+    memcpy(line, data + start, line_len);
+    line[line_len] = '\0';
+    if (line_len > 0 && line[line_len - 1] == '\r') {
+        line[line_len - 1] = '\0';
+    }
+    *offset = (i < len && data[i] == '\n') ? i + 1 : i;
+    return 1;
+}
+
+static int next_line(FILE *fp, const unsigned char *data, size_t len,
+                     size_t *offset, char *line, size_t cap) {
+    if (fp) return fgets(line, (int)cap, fp) != NULL;
+    return read_line_buffer(data, len, offset, line, cap);
+}
 
 int calibration_load(const char *path,
                      float *nm_start,
@@ -13,7 +39,17 @@ int calibration_load(const char *path,
     if (!path || !points || max_points <= 0) return -1;
 
     FILE *fp = fopen(path, "r");
-    if (!fp) return -1;
+    const unsigned char *data = NULL;
+    size_t data_len = 0;
+    size_t offset = 0;
+    if (!fp) {
+        if (strcmp(path, "calibration.txt") == 0) {
+            data = _binary_calibration_txt_start;
+            data_len = (size_t)(_binary_calibration_txt_end
+                                - _binary_calibration_txt_start);
+        }
+        if (!data || data_len == 0) return -1;
+    }
 
     char line[128];
     int count = 0;
@@ -22,17 +58,17 @@ int calibration_load(const char *path,
     float start_val = 0.0f;
     float per_x_val = 0.0f;
 
-    if (!fgets(line, sizeof(line), fp)) {
-        fclose(fp);
+    if (!next_line(fp, data, data_len, &offset, line, sizeof(line))) {
+        if (fp) fclose(fp);
         return -1;
     }
 
     if (strncmp(line, "CALIBRATION_V1", 14) != 0) {
-        fclose(fp);
+        if (fp) fclose(fp);
         return -1;
     }
 
-    while (fgets(line, sizeof(line), fp)) {
+    while (next_line(fp, data, data_len, &offset, line, sizeof(line))) {
         if (line[0] == '#') continue;
         if (line[0] == '\n' || line[0] == '\r') continue;
 
@@ -59,7 +95,7 @@ int calibration_load(const char *path,
         }
     }
 
-    fclose(fp);
+    if (fp) fclose(fp);
 
     if (out_count) *out_count = count;
     if (nm_start) *nm_start = has_start ? start_val : 0.0f;

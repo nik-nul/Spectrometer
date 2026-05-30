@@ -19,6 +19,9 @@ All calculations use the same 1 nm grid from 380 to 780 nm (inclusive).
 - CRI R1-R15 reflectance tables: `ref/CIE_srf_cri.csv` (resampled to 1 nm)
 - CIE daylight basis S0/S1/S2: `ref/S.csv` (resampled to 1 nm)
 
+By default, these CSV tables are embedded into the binary at build time.
+Use `-F` to force loading them from `ref/` on disk.
+
 ## XYZ, xy, and 1960 UCS
 
 Given SPD $S(\lambda)$ and CMFs $\bar{x}, \bar{y}, \bar{z}$:

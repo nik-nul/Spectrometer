@@ -16,6 +16,7 @@ int colorimetry_compute_cri_from_ctx(const SpectrometerContext *ctx,
                                      CRIResult *out);
 int colorimetry_compute_cri_from_csv(const char *csv_path,
                                      CRIResult *out);
+void colorimetry_set_use_external_refs(int use_external);
 void colorimetry_print_result(const CRIResult *res);
 
 #endif
