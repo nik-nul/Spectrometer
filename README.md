@@ -4,6 +4,8 @@ A real-time spectrum analyzer for linux, using V4L2 and providing CSV/PPM output
 
 本项目是”光度学与色度学“课程的课程项目。
 
+<img width="1920" height="940" alt="Image" src="https://github.com/user-attachments/assets/1434a1f2-86ab-4ba8-9994-76b5e7ec0239" />
+
 ## Features
 
 - **Live capture** from any V4L2-compatible camera (USB webcam, industrial camera)
