@@ -101,14 +101,14 @@ $$c'_k = c_n\frac{c_{k1}}{c_k},\quad d'_k = d_n\frac{d_{k1}}{d_k}$$
 $$u' = \frac{10.872 + 0.404c' - 4d'}{16.518 + 1.481c' - d'},\quad
 v' = \frac{5.520}{16.518 + 1.481c' - d'}$$
 
-5) Convert to CIE 1964 $W^*U^*V^*$:
+5) Convert to CIE 1964 $W^\*U^\*V^\*$:
 
-$$W^* = 25Y^{1/3} - 17$$
-$$U^* = 13W^*(u - u_n),\quad V^* = 13W^*(v - v_n)$$
+$$W^\* = 25Y^{1/3} - 17$$
+$$U^\* = 13W^\*(u - u_n),\quad V^\* = 13W^\*(v - v_n)$$
 
 6) Color difference and special CRI:
 
-$$\Delta E = \sqrt{(W^*_k - W^*_n)^2 + (U^*_k - U^*_n)^2 + (V^*_k - V^*_n)^2}$$
+$$\Delta E = \sqrt{(W^\*_k - W^\*_n)^2 + (U^\*_k - U^\*_n)^2 + (V\^*_k - V^\*_n)^2}$$
 
 $$R_i = 100 - 4.6\Delta E$$
 
