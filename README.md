@@ -16,7 +16,7 @@ A real-time spectrum analyzer for linux, using V4L2 and providing CSV/PPM output
   - Per-column RGB-weighted accumulation over ROI
   - Low-pass digital filtering
   - Rise/fall smoothing
-  - Gamma correction for jepg files
+  - Gamma correction for jpeg files
 - **Peak and dip detection** with on-screen markers
 - **Wavelength-to-color rendering**
 - **Interactive controls** (in SDL window):
@@ -143,4 +143,4 @@ The calibration maps pixel columns to wavelengths via `nm(pixel) = nm_start + pi
 
 ## Notes
 
-This project was built and tested based on a homemade spectrometer model designed and sold by 花园小圃, which can be found on platforms such as Taobao and Bilibili. The project references some logic of 花园小圃's software, whose parts of the code were taken from by [Theremino Spectrometer](https://www.theremino.com/). However, no code from those two project was reused, as the those were developed using VB and DirectShow, among other tech stacks.
+This project was built and tested based on a homemade spectrometer model designed and sold by 窗台小圃, which can be found on platforms such as Taobao and Bilibili. The project references some logic of 窗台小圃's software, whose parts of the code were taken from by [Theremino Spectrometer](https://www.theremino.com/). However, no code from those two project was reused, as the those were developed using VB and DirectShow, among other tech stacks.
