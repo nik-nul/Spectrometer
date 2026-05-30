@@ -478,6 +478,8 @@ void sdl_display_render(SDLDisplay *dpy,
                 dpy->key_mask |= SDL_KEYMASK_CALIBRATE;
             if (e.key.keysym.sym == SDLK_c)
                 dpy->key_mask |= SDL_KEYMASK_COLORIMETRY;
+            if (e.key.keysym.sym == SDLK_SPACE)
+                dpy->key_mask |= SDL_KEYMASK_PAUSE;
             if (e.key.keysym.sym == SDLK_LEFTBRACKET)
                 dpy->key_mask |= SDL_KEYMASK_EXPOSURE_DEC;
             if (e.key.keysym.sym == SDLK_RIGHTBRACKET)

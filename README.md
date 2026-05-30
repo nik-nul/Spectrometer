@@ -93,6 +93,7 @@ Options:
 **Live camera with default settings:**
 ```bash
 ./spectrometer -d /dev/video2
+# Press space to pause/resume.
 ```
 
 **Analyze a single PPM image and save CSV:**

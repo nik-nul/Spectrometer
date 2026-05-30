@@ -77,6 +77,7 @@ static uint32_t poll_cli_keymask(void) {
         if (c == 's') mask |= SDL_KEYMASK_SAVE;
         else if (c == 'v') mask |= SDL_KEYMASK_CALIBRATE;
         else if (c == 'c') mask |= SDL_KEYMASK_COLORIMETRY;
+        else if (c == ' ') mask |= SDL_KEYMASK_PAUSE;
     }
     return mask;
 }
@@ -348,6 +349,7 @@ int main(int argc, char **argv) {
 
         int total_frames = 0;
         int fps_frames = 0;
+        int paused = 0;
         double last_log = wall_seconds();
         FILE *csv_log_fp = NULL;
 
@@ -361,12 +363,15 @@ int main(int argc, char **argv) {
         }
 
         while (show_sdl ? dpy.running : (total_frames < 100)) {
-            if (v4l2_capture_frame(&dev) < 0) break;
-
-            spec_process_frame(&ctx, dev.buffer, dev.width,
-                               dev.height);
-            total_frames++;
-            fps_frames++;
+            if (!paused) {
+                if (v4l2_capture_frame(&dev) < 0) break;
+                spec_process_frame(&ctx, dev.buffer, dev.width,
+                                   dev.height);
+                total_frames++;
+                fps_frames++;
+            } else if (!show_sdl) {
+                usleep(10000);
+            }
 
             uint32_t key_mask = poll_cli_keymask();
             if (show_sdl) {
@@ -374,6 +379,11 @@ int main(int argc, char **argv) {
                 key_mask |= dpy.key_mask;
             }
             if (key_mask) {
+                if (key_mask & SDL_KEYMASK_PAUSE) {
+                    paused = !paused;
+                    printf("%s\n", paused ? "Paused" : "Resumed");
+                    fflush(stdout);
+                }
                 int delta = 0;
                 if (key_mask & SDL_KEYMASK_EXPOSURE_DEC)
                     delta = -exposure_step;
