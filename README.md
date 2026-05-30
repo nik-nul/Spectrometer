@@ -4,7 +4,7 @@ A real-time spectrum analyzer for linux, using V4L2 and providing CSV/PPM output
 
 本项目是”光度学与色度学“课程的课程项目。
 
-<img width="1920" height="940" alt="Image" src="https://github.com/user-attachments/assets/1434a1f2-86ab-4ba8-9994-76b5e7ec0239" />
+<img width="1920" height="940" alt="1" src="https://github.com/user-attachments/assets/a0826ecb-ac34-4427-93ea-020a5d5363f8" />
 
 ## Features
 
@@ -135,12 +135,12 @@ main.c                     — CLI parsing, event loop, integration
 ├── input/
 │   ├── v4l2.c/h           — V4L2 camera capture backend
 │   └── image_loader.c/h   — PPM/JPEG image loader
-└── output/
-    └── sdl_display.c/h    — SDL2 real-time visualization
-ref/
-  ├── CIE_xyz_1931_2deg.csv — CIE 1931 2° CMFs
-  ├── CIE_srf_cri.csv        — CRI R1–R15 reflectance tables
-  └── S.csv                  — CIE daylight basis functions
+├── output/
+│   └── sdl_display.c/h    — SDL2 real-time visualization
+└── ref/
+    ├── CIE_xyz_1931_2deg.csv — CIE 1931 2° CMFs
+    ├── CIE_srf_cri.csv        — CRI R1–R15 reflectance tables
+    └── S.csv                  — CIE daylight basis functions
 ```
 
 ## Calibration File Format
