@@ -1,9 +1,12 @@
 #include "sdl_display.h"
 #include "../lib/wavelength.h"
+#include "../lib/colorimetry.h"
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
+#include <math.h>
 
 int sdl_display_init(SDLDisplay *dpy, int width, int spectrum_h) {
     memset(dpy, 0, sizeof(*dpy));
@@ -52,6 +55,11 @@ int sdl_display_init(SDLDisplay *dpy, int width, int spectrum_h) {
     dpy->key_mask = 0;
     dpy->last_frame = NULL;
     dpy->last_frame_len = 0;
+    dpy->show_colorimetry = 1;
+    dpy->colorimetry_valid = 0;
+    dpy->cct = 0.0;
+    dpy->ra = 0.0;
+    dpy->last_colorimetry_ms = 0;
     return 0;
 }
 
@@ -111,27 +119,59 @@ static void draw_vline(uint8_t *pixels, int w, int h, int x,
     }
 }
 
-static void draw_digit3x5_scaled(uint8_t *pixels, int w, int h,
+static const uint8_t FONT_3X5_DIGITS[10][5] = {
+    {0x7, 0x5, 0x5, 0x5, 0x7},
+    {0x2, 0x6, 0x2, 0x2, 0x7},
+    {0x7, 0x1, 0x7, 0x4, 0x7},
+    {0x7, 0x1, 0x7, 0x1, 0x7},
+    {0x5, 0x5, 0x7, 0x1, 0x1},
+    {0x7, 0x4, 0x7, 0x1, 0x7},
+    {0x7, 0x4, 0x7, 0x5, 0x7},
+    {0x7, 0x1, 0x1, 0x1, 0x1},
+    {0x7, 0x5, 0x7, 0x5, 0x7},
+    {0x7, 0x5, 0x7, 0x1, 0x7}
+};
+
+static int glyph3x5(char c, uint8_t out[5]) {
+    if (c >= '0' && c <= '9') {
+        int idx = c - '0';
+        if (out) {
+            for (int i = 0; i < 5; i++) out[i] = FONT_3X5_DIGITS[idx][i];
+        }
+        return 1;
+    }
+
+    switch (c) {
+        case 'A':
+            if (out) { out[0] = 0x2; out[1] = 0x5; out[2] = 0x7; out[3] = 0x5; out[4] = 0x5; }
+            return 1;
+        case 'C':
+            if (out) { out[0] = 0x7; out[1] = 0x4; out[2] = 0x4; out[3] = 0x4; out[4] = 0x7; }
+            return 1;
+        case 'K':
+            if (out) { out[0] = 0x5; out[1] = 0x5; out[2] = 0x6; out[3] = 0x5; out[4] = 0x5; }
+            return 1;
+        case 'R':
+            if (out) { out[0] = 0x6; out[1] = 0x5; out[2] = 0x6; out[3] = 0x5; out[4] = 0x5; }
+            return 1;
+        case 'T':
+            if (out) { out[0] = 0x7; out[1] = 0x2; out[2] = 0x2; out[3] = 0x2; out[4] = 0x2; }
+            return 1;
+        case '.':
+            if (out) { out[0] = 0x0; out[1] = 0x0; out[2] = 0x0; out[3] = 0x0; out[4] = 0x2; }
+            return 1;
+        default: return 0;
+    }
+}
+
+static void draw_glyph3x5_scaled(uint8_t *pixels, int w, int h,
                                  int x, int y, int scale,
                                  char c, uint8_t r, uint8_t g, uint8_t b) {
-    static const uint8_t font[10][5] = {
-        {0x7, 0x5, 0x5, 0x5, 0x7},
-        {0x2, 0x6, 0x2, 0x2, 0x7},
-        {0x7, 0x1, 0x7, 0x4, 0x7},
-        {0x7, 0x1, 0x7, 0x1, 0x7},
-        {0x5, 0x5, 0x7, 0x1, 0x1},
-        {0x7, 0x4, 0x7, 0x1, 0x7},
-        {0x7, 0x4, 0x7, 0x5, 0x7},
-        {0x7, 0x1, 0x1, 0x1, 0x1},
-        {0x7, 0x5, 0x7, 0x5, 0x7},
-        {0x7, 0x5, 0x7, 0x1, 0x7}
-    };
-
     if (scale < 1) scale = 1;
-    if (c < '0' || c > '9') return;
-    int idx = c - '0';
+    uint8_t rows[5];
+    if (!glyph3x5(c, rows)) return;
     for (int row = 0; row < 5; row++) {
-        uint8_t bits = font[idx][row];
+        uint8_t bits = rows[row];
         for (int col = 0; col < 3; col++) {
             if (bits & (1 << (2 - col))) {
                 for (int sy = 0; sy < scale; sy++) {
@@ -171,14 +211,89 @@ static void draw_text3x5_scaled(uint8_t *pixels, int w, int h,
     int spacing = scale;
     int cursor = x;
     for (size_t i = 0; text[i] != '\0'; i++) {
-        if (text[i] >= '0' && text[i] <= '9') {
-            draw_digit3x5_scaled(pixels, w, h, cursor, y, scale,
-                                 text[i], r, g, b);
+        char c = (char)toupper((unsigned char)text[i]);
+        if (glyph3x5(c, NULL)) {
+            draw_glyph3x5_scaled(pixels, w, h, cursor, y, scale,
+                                 c, r, g, b);
             cursor += digit_w + spacing;
         } else {
             cursor += spacing * 2;
         }
     }
+}
+
+static int text_width3x5_scaled(const char *text, int scale) {
+    if (scale < 1) scale = 1;
+    int digit_w = 3 * scale;
+    int spacing = scale;
+    int width = 0;
+    for (size_t i = 0; text[i] != '\0'; i++) {
+        char c = (char)toupper((unsigned char)text[i]);
+        if (glyph3x5(c, NULL)) {
+            width += digit_w + spacing;
+        } else {
+            width += spacing * 2;
+        }
+    }
+    if (width > 0) width -= spacing;
+    return width;
+}
+
+static void update_colorimetry(SDLDisplay *dpy,
+                               const SpectrometerContext *ctx) {
+    if (!dpy->show_colorimetry) return;
+#if COLORIMETRY_UPDATE_MODE == COLORIMETRY_UPDATE_FIXED
+    uint32_t now = SDL_GetTicks();
+    if (now - dpy->last_colorimetry_ms < COLORIMETRY_FIXED_INTERVAL_MS)
+        return;
+    dpy->last_colorimetry_ms = now;
+#else
+    dpy->last_colorimetry_ms = SDL_GetTicks();
+#endif
+
+    CRIResult res;
+    if (colorimetry_compute_cri_from_ctx(ctx, &res) == 0) {
+        dpy->cct = res.cct;
+        dpy->ra = res.ra;
+        dpy->colorimetry_valid = 1;
+    } else {
+        dpy->colorimetry_valid = 0;
+    }
+}
+
+static void draw_colorimetry(SDLDisplay *dpy,
+                             const SpectrometerContext *ctx,
+                             uint8_t *pixels) {
+    if (!dpy->show_colorimetry) return;
+    update_colorimetry(dpy, ctx);
+    if (!dpy->colorimetry_valid) return;
+
+    int scale = 4;
+    int margin = 4;
+    int line_h = 5 * scale + scale;
+    int w = dpy->width;
+    int h = dpy->height;
+
+    int cct_int = (int)lround(dpy->cct);
+    char cct_text[32];
+    char ra_text[32];
+    snprintf(cct_text, sizeof(cct_text), "CCT %dK", cct_int);
+    snprintf(ra_text, sizeof(ra_text), "RA %.2f", dpy->ra);
+
+    int cct_w = text_width3x5_scaled(cct_text, scale);
+    int ra_w = text_width3x5_scaled(ra_text, scale);
+    int text_w = cct_w > ra_w ? cct_w : ra_w;
+    int x = w - margin - text_w;
+    if (x < margin) x = margin;
+
+    int y = 2;
+    if (y + line_h >= h) return;
+    draw_text3x5_scaled(pixels, w, h, x, y, scale,
+                        cct_text, 20, 20, 20);
+    y += line_h;
+    if (y + 5 * scale >= h) return;
+    draw_text3x5_scaled(pixels, w, h, x, y, scale,
+                        ra_text, 20, 20, 20);
 }
 
 static void draw_spectrum(SDLDisplay *dpy,
@@ -361,6 +476,8 @@ void sdl_display_render(SDLDisplay *dpy,
                 dpy->key_mask |= SDL_KEYMASK_SAVE;
             if (e.key.keysym.sym == SDLK_v)
                 dpy->key_mask |= SDL_KEYMASK_CALIBRATE;
+            if (e.key.keysym.sym == SDLK_c)
+                dpy->key_mask |= SDL_KEYMASK_COLORIMETRY;
             if (e.key.keysym.sym == SDLK_LEFTBRACKET)
                 dpy->key_mask |= SDL_KEYMASK_EXPOSURE_DEC;
             if (e.key.keysym.sym == SDLK_RIGHTBRACKET)
@@ -383,6 +500,7 @@ void sdl_display_render(SDLDisplay *dpy,
     draw_color_bars(dpy, ctx, pixels);
     draw_spectrum(dpy, ctx, pixels);
     draw_peaks(dpy, ctx, pixels);
+    draw_colorimetry(dpy, ctx, pixels);
 
     int row_bytes = dpy->width * 3;
     int needed = row_bytes * dpy->height;

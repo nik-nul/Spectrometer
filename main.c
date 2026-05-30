@@ -6,11 +6,14 @@
 #include <time.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/select.h>
+#include <ctype.h>
 #include <SDL2/SDL.h>
 
 #include "lib/spectrometer.h"
 #include "lib/calibration.h"
 #include "lib/csv.h"
+#include "lib/colorimetry.h"
 #include "input/v4l2.h"
 #include "input/image_loader.h"
 #include "output/sdl_display.h"
@@ -44,6 +47,8 @@ static void print_usage(const char *prog) {
     fprintf(stderr, "  -p            Disable peak detection\n");
     fprintf(stderr, "  -s            Enable headless mode (no SDL)\n");
     fprintf(stderr, "  -l <file>     Enable CSV logging (append to file)\n");
+    fprintf(stderr, "  -R <file>     Compute CRI/CCT from spectrum CSV and exit\n");
+    fprintf(stderr, "  -T            Disable CCT/Ra overlay on SDL\n");
     fprintf(stderr, "  -D <px>       Dest graph width (default 1920)\n");
     fprintf(stderr, "  -H <px>       Dest graph height (default 1080)\n");
     fprintf(stderr, "  -?            This help\n");
@@ -51,6 +56,29 @@ static void print_usage(const char *prog) {
 
 static double wall_seconds(void) {
     return (double)time(NULL);
+}
+
+static uint32_t poll_cli_keymask(void) {
+    uint32_t mask = 0;
+    fd_set rfds;
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+    FD_ZERO(&rfds);
+    FD_SET(STDIN_FILENO, &rfds);
+    int ret = select(STDIN_FILENO + 1, &rfds, NULL, NULL, &tv);
+    if (ret <= 0) return 0;
+
+    char buf[64];
+    ssize_t n = read(STDIN_FILENO, buf, sizeof(buf));
+    if (n <= 0) return 0;
+    for (ssize_t i = 0; i < n; i++) {
+        char c = (char)tolower((unsigned char)buf[i]);
+        if (c == 's') mask |= SDL_KEYMASK_SAVE;
+        else if (c == 'v') mask |= SDL_KEYMASK_CALIBRATE;
+        else if (c == 'c') mask |= SDL_KEYMASK_COLORIMETRY;
+    }
+    return mask;
 }
 
 static void make_snapshot_name(char *out, size_t out_len, int index) {
@@ -160,6 +188,8 @@ int main(int argc, char **argv) {
     const char *image_file = NULL;
     const char *csv_output = NULL;
     const char *csv_log = NULL;
+    const char *cri_csv_input = NULL;
+    int show_colorimetry = 1;
     int cap_width = 1920, cap_height = 1080;
     int exposure = 201;
     int exposure_step = 100;
@@ -175,7 +205,7 @@ int main(int argc, char **argv) {
     spec_init_config(&cfg);
 
     int opt;
-    while ((opt = getopt(argc, argv, "d:i:o:w:h:e:E:g:GX:x:Y:y:f:u:v:n:m:rcpD:H:sl:?CK:N")) != -1) {
+    while ((opt = getopt(argc, argv, "d:i:o:w:h:e:E:g:GX:x:Y:y:f:u:v:n:m:rcpD:H:sl:R:T?CK:N")) != -1) {
         switch (opt) {
             case 'd': v4l2_device = optarg; break;
             case 'i': image_file = optarg; break;
@@ -200,6 +230,8 @@ int main(int argc, char **argv) {
             case 'p': cfg.show_peaks = false; break;
             case 's': show_sdl = 0; break;
             case 'l': csv_log = optarg; break;
+            case 'R': cri_csv_input = optarg; break;
+            case 'T': show_colorimetry = 0; break;
             case 'D': cfg.dest_width = atoi(optarg); break;
             case 'H': cfg.dest_height = atoi(optarg); break;
             case 'C': calibration_mode = 1; break;
@@ -213,6 +245,17 @@ int main(int argc, char **argv) {
     if (calibration_mode && !show_sdl) {
         fprintf(stderr, "Calibration mode requires SDL display, enabling SDL.\n");
         show_sdl = 1;
+    }
+
+    if (cri_csv_input) {
+        CRIResult res;
+        if (colorimetry_compute_cri_from_csv(cri_csv_input, &res) == 0) {
+            colorimetry_print_result(&res);
+            return 0;
+        }
+        fprintf(stderr, "Failed to compute CRI/CCT from CSV: %s\n",
+                cri_csv_input);
+        return 1;
     }
 
     if (!v4l2_device && !image_file) {
@@ -229,6 +272,9 @@ int main(int argc, char **argv) {
         if (sdl_display_init(&dpy, cfg.dest_width,
                              cfg.dest_height) < 0) {
             show_sdl = 0;
+        }
+        if (show_sdl) {
+            dpy.show_colorimetry = show_colorimetry;
         }
     }
 
@@ -322,59 +368,73 @@ int main(int argc, char **argv) {
             total_frames++;
             fps_frames++;
 
+            uint32_t key_mask = poll_cli_keymask();
             if (show_sdl) {
                 sdl_display_render(&dpy, &ctx);
-                if (dpy.key_mask) {
-                    int delta = 0;
-                    if (dpy.key_mask & SDL_KEYMASK_EXPOSURE_DEC)
-                        delta = -exposure_step;
-                    if (dpy.key_mask & SDL_KEYMASK_EXPOSURE_INC)
-                        delta = exposure_step;
+                key_mask |= dpy.key_mask;
+            }
+            if (key_mask) {
+                int delta = 0;
+                if (key_mask & SDL_KEYMASK_EXPOSURE_DEC)
+                    delta = -exposure_step;
+                if (key_mask & SDL_KEYMASK_EXPOSURE_INC)
+                    delta = exposure_step;
 
-                    if (delta != 0) {
-                        if (exposure < 0 &&
-                            v4l2_get_exposure(&dev, &exposure) < 0) {
+                if (delta != 0) {
+                    if (exposure < 0 &&
+                        v4l2_get_exposure(&dev, &exposure) < 0) {
+                        fprintf(stderr,
+                                "Cannot read current exposure\n");
+                    } else if (exposure >= 0) {
+                        exposure += delta;
+                        if (v4l2_set_exposure(&dev, exposure) < 0) {
                             fprintf(stderr,
-                                    "Cannot read current exposure\n");
-                        } else if (exposure >= 0) {
-                            exposure += delta;
-                            if (v4l2_set_exposure(&dev, exposure) < 0) {
-                                fprintf(stderr,
-                                        "Failed to set exposure: %d\n",
-                                        exposure);
-                            } else {
-                                printf("\nExposure: %d\n", exposure);
-                                fflush(stdout);
-                            }
+                                    "Failed to set exposure: %d\n",
+                                    exposure);
+                        } else {
+                            printf("\nExposure: %d\n", exposure);
+                            fflush(stdout);
                         }
                     }
+                }
 
-                    if (dpy.key_mask & SDL_KEYMASK_SAVE) {
-                        char path[64];
-                        make_snapshot_name(path, sizeof(path),
-                                           snapshot_index++);
-                        if (sdl_display_save_ppm(&dpy, path) == 0) {
-                            printf("\nSaved spectrum image: %s\n", path);
-                        } else {
-                            fprintf(stderr,
-                                    "\nFailed to save spectrum image\n");
-                        }
-                        size_t len = strlen(path);
-                        if (len >= 3) {
-                            strcpy(path + len - 3, "csv");
-                        }
-                        if (csv_write_spectrum(path, &ctx, ',') < 0) {
-                            fprintf(stderr, "Failed to write CSV: %s\n",
-                                    csv_output);
-                        } else {
-                            printf("CSV written to %s\n", csv_output);
-                        }
-                        fflush(stdout);
+                if (key_mask & SDL_KEYMASK_SAVE) {
+                    char path[64];
+                    make_snapshot_name(path, sizeof(path),
+                                       snapshot_index++);
+                    if (show_sdl && sdl_display_save_ppm(&dpy, path) == 0) {
+                        printf("\nSaved spectrum image: %s\n", path);
+                    } else if (show_sdl) {
+                        fprintf(stderr,
+                                "\nFailed to save spectrum image\n");
                     }
+                    size_t len = strlen(path);
+                    if (len >= 3) {
+                        strcpy(path + len - 3, "csv");
+                    }
+                    if (csv_write_spectrum(path, &ctx, ',') < 0) {
+                        fprintf(stderr, "Failed to write CSV: %s\n",
+                                csv_output);
+                    } else {
+                        printf("CSV written to %s\n", csv_output);
+                    }
+                    fflush(stdout);
+                }
 
-                    if (calibration_mode &&
-                        (dpy.key_mask & SDL_KEYMASK_CALIBRATE) &&
-                        !calibrating) {
+                if (key_mask & SDL_KEYMASK_COLORIMETRY) {
+                    CRIResult res;
+                    printf("\n");
+                    if (colorimetry_compute_cri_from_ctx(&ctx, &res) == 0) {
+                        colorimetry_print_result(&res);
+                    } else {
+                        fprintf(stderr, "Failed to compute CRI/CCT from live data\n");
+                    }
+                    fflush(stdout);
+                }
+
+                if (calibration_mode &&
+                    (key_mask & SDL_KEYMASK_CALIBRATE) &&
+                    !calibrating) {
                         calibrating = 1;
 
                         CalibrationPoint points[32];
@@ -448,7 +508,6 @@ int main(int argc, char **argv) {
                     fflush(csv_log_fp);
                 }
             }
-        }
         printf("\n");
 
         if (csv_output) {

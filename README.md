@@ -19,10 +19,12 @@ A real-time spectrum analyzer for linux, using V4L2 and providing CSV/PPM output
   - Gamma correction for jpeg files
 - **Peak and dip detection** with on-screen markers
 - **Wavelength-to-color rendering**
+- **Colorimetry** — CCT + CRI (R1–R15, Ra) overlay and CSV computation
 - **Interactive controls** (in SDL window):
   - `[` / `]` — decrease/increase exposure
   - `s` — save spectrum snapshot (PPM + CSV)
   - `v` — trigger calibration (in `-C` mode) (specify the expected result in CLI)
+  - `c` — compute CCT/CRI once and print to CLI
 - **CSV export** for post-processing
 - **Headless mode** (`-s`) for automated/embedded operation
 
@@ -79,6 +81,8 @@ Options:
   -p            Disable peak detection
   -s            Enable headless mode (no SDL)
   -l <file>     Enable CSV logging (append to file)
+  -R <file>     Compute CRI/CCT from spectrum CSV and exit
+  -T            Disable CCT/Ra overlay on SDL
   -D <px>       Dest graph width (default 1920)
   -H <px>       Dest graph height (default 1080)
   -?            This help
@@ -107,6 +111,17 @@ Options:
 ./spectrometer -d /dev/video0 -s -o log.csv
 ```
 
+**Compute CRI/CCT from CSV:**
+```bash
+./spectrometer -R spectrum.csv
+```
+
+### Colorimetry Notes
+
+The SDL overlay shows CCT and Ra by default. Update rate is controlled by
+macros in [output/sdl_display.h](output/sdl_display.h). The full method and
+tables are documented in [colorimetry.md](colorimetry.md).
+
 ## Architecture
 
 ```
@@ -115,12 +130,17 @@ main.c                     — CLI parsing, event loop, integration
 │   ├── spectrometer.c/h   — Core spectrum processing pipeline
 │   ├── wavelength.c/h     — Wavelength → RGB color mapping
 │   ├── calibration.c/h    — Calibration data load/save/compute
+│   ├── colorimetry.c/h     — CCT/CRI computation
 │   └── csv.c/h            — CSV spectrum export
 ├── input/
 │   ├── v4l2.c/h           — V4L2 camera capture backend
 │   └── image_loader.c/h   — PPM/JPEG image loader
 └── output/
     └── sdl_display.c/h    — SDL2 real-time visualization
+ref/
+  ├── CIE_xyz_1931_2deg.csv — CIE 1931 2° CMFs
+  ├── CIE_srf_cri.csv        — CRI R1–R15 reflectance tables
+  └── S.csv                  — CIE daylight basis functions
 ```
 
 ## Calibration File Format
