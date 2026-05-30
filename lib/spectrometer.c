@@ -28,7 +28,7 @@ void spec_init_config(SpectrometerConfig *cfg) {
     cfg->use_colors = true;
     cfg->trim_scale = false;
     cfg->reference_enabled = false;
-    cfg->gamma_enable = true;
+    cfg->gamma_enable = false;
     cfg->gamma = 2.2f;
     cfg->dest_width = 1920;
     cfg->dest_height = 880;

@@ -63,7 +63,7 @@ Options:
   -e <value>    Manual exposure value (device-specific, default 201)
   -E <step>     Exposure step for [/] (default 100)
   -g <gamma>    Gamma correction (default 2.2)
-  -G            Disable gamma correction
+  -G            Enable gamma correction
   -C            Calibration mode (press v to start)
   -K <file>     Calibration file path (default calibration.txt)
   -N            Disable calibration loading

@@ -29,7 +29,7 @@ static void print_usage(const char *prog) {
     fprintf(stderr, "  -e <value>    Manual exposure value (device-specific, usually 1 to 5000, default 1)\n");
     fprintf(stderr, "  -E <step>     Exposure step for [/] (default 100)\n");
     fprintf(stderr, "  -g <gamma>    Gamma correction (default 2.2)\n");
-    fprintf(stderr, "  -G            Disable gamma correction\n");
+    fprintf(stderr, "  -G            Enable gamma correction\n");
     fprintf(stderr, "  -C            Calibration mode (press v to start)\n");
     fprintf(stderr, "  -K <file>     Calibration file path (default calibration.txt)\n");
     fprintf(stderr, "  -N            Disable calibration loading\n");
@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
             case 'e': exposure = atoi(optarg); break;
             case 'E': exposure_step = atoi(optarg); break;
             case 'g': cfg.gamma = (float)atof(optarg); cfg.gamma_enable = true; break;
-            case 'G': cfg.gamma_enable = false; break;
+            case 'G': cfg.gamma_enable = true; break;
             case 'X': cfg.start_x = atoi(optarg); break;
             case 'x': cfg.end_x = atoi(optarg); break;
             case 'Y': cfg.start_y = atoi(optarg); break;
