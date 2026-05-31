@@ -269,6 +269,8 @@ int main(int argc, char **argv) {
 
     colorimetry_set_use_external_refs(use_external_refs);
 
+    printf("Source Code Available at: https://github.com/nik-nul/Spectrometer\n");
+
     if (gamut_mode && !show_sdl) {
         fprintf(stderr, "Gamut mode requires SDL display, enabling SDL.\n");
         show_sdl = 1;
