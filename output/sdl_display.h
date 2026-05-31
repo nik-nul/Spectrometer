@@ -11,6 +11,8 @@
 #define SDL_KEYMASK_CALIBRATE 0x8u
 #define SDL_KEYMASK_COLORIMETRY 0x10u
 #define SDL_KEYMASK_PAUSE 0x20u
+#define SDL_KEYMASK_GAMUT_SAMPLE 0x40u
+#define SDL_KEYMASK_GAMUT_RESET 0x80u
 
 #define COLORIMETRY_UPDATE_SYNC 0
 #define COLORIMETRY_UPDATE_FIXED 1
@@ -19,6 +21,11 @@
 
 #define MAX_PEAKS 10
 #define PEAK_RATIO 0.05f
+
+typedef struct {
+    double area_ratio;
+    double coverage_ratio;
+} GamutMetrics;
 
 typedef struct {
     void *window;
@@ -36,11 +43,29 @@ typedef struct {
     double cct;
     double ra;
     uint32_t last_colorimetry_ms;
+    int gamut_mode;
+    void *gamut_window;
+    void *gamut_renderer;
+    uint32_t gamut_window_id;
+    int gamut_width;
+    int gamut_height;
+    int gamut_stage;
+    int gamut_samples;
+    double gamut_xy[3][2];
+    int gamut_metrics_valid;
+    GamutMetrics gamut_metrics[3];
 } SDLDisplay;
 
 int  sdl_display_init(SDLDisplay *dpy, int width, int spectrum_h);
 void sdl_display_render(SDLDisplay *dpy, const SpectrometerContext *ctx);
 int  sdl_display_save_ppm(SDLDisplay *dpy, const char *path);
+int  sdl_display_enable_gamut_mode(SDLDisplay *dpy, int width, int height);
+void sdl_display_gamut_reset(SDLDisplay *dpy);
+int  sdl_display_gamut_sample(SDLDisplay *dpy,
+                              const SpectrometerContext *ctx,
+                              int *out_stage,
+                              double *out_x,
+                              double *out_y);
 void sdl_display_close(SDLDisplay *dpy);
 
 #endif

@@ -635,6 +635,47 @@ int colorimetry_compute_cri_from_csv(const char *csv_path,
     return ret;
 }
 
+int colorimetry_compute_xy_from_ctx(const SpectrometerContext *ctx,
+                                    double *x, double *y, double *Y_out) {
+    if (!ctx || !x || !y) return -1;
+    if (load_ref_data() < 0) return -1;
+
+    double spd[CMF_WL_COUNT];
+    if (fill_spd_from_ctx(ctx, spd) < 0) return -1;
+
+    double X = 0.0, Y = 0.0, Z = 0.0;
+    compute_xyz_from_spd(spd, &X, &Y, &Z, NULL);
+    double sum = X + Y + Z;
+    if (sum <= 0.0) return -1;
+
+    xyz_to_xy(X, Y, Z, x, y);
+    if (Y_out) *Y_out = Y;
+    return 0;
+}
+
+int colorimetry_get_spectral_locus(double *out_x, double *out_y,
+                                   int max_points, int *out_count) {
+    if (!out_x || !out_y || max_points <= 0) return -1;
+    if (load_ref_data() < 0) return -1;
+
+    int count = 0;
+    for (int i = 0; i < CMF_WL_COUNT; i++) {
+        double X = g_ref.xbar[i];
+        double Y = g_ref.ybar[i];
+        double Z = g_ref.zbar[i];
+        double sum = X + Y + Z;
+        if (sum <= 0.0) continue;
+        if (count < max_points) {
+            out_x[count] = X / sum;
+            out_y[count] = Y / sum;
+            count++;
+        }
+    }
+
+    if (out_count) *out_count = count;
+    return count > 0 ? 0 : -1;
+}
+
 void colorimetry_print_result(const CRIResult *res) {
     if (!res) return;
     printf("CCT: %.0f K\n", res->cct);

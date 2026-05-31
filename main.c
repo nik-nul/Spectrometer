@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/select.h>
 #include <ctype.h>
+#include <math.h>
 #include <SDL2/SDL.h>
 
 #include "lib/spectrometer.h"
@@ -50,6 +51,7 @@ static void print_usage(const char *prog) {
     fprintf(stderr, "  -R <file>     Compute CRI/CCT from spectrum CSV and exit\n");
     fprintf(stderr, "  -F            Use external ref CSV files (ref/*.csv)\n");
     fprintf(stderr, "  -T            Disable CCT/Ra overlay on SDL\n");
+    fprintf(stderr, "  -Z            Gamut test mode (show color patch window)\n");
     fprintf(stderr, "  -D <px>       Dest graph width (default 1920)\n");
     fprintf(stderr, "  -H <px>       Dest graph height (default 1080)\n");
     fprintf(stderr, "  -?            This help\n");
@@ -192,6 +194,7 @@ int main(int argc, char **argv) {
     const char *cri_csv_input = NULL;
     int show_colorimetry = 1;
     int use_external_refs = 0;
+    int gamut_mode = 0;
     int cap_width = 1920, cap_height = 1080;
     int exposure = 201;
     int exposure_step = 100;
@@ -207,7 +210,7 @@ int main(int argc, char **argv) {
     spec_init_config(&cfg);
 
     int opt;
-    while ((opt = getopt(argc, argv, "d:i:o:w:h:e:E:g:GX:x:Y:y:f:u:v:n:m:rcpD:H:sl:R:FT?CK:N")) != -1) {
+    while ((opt = getopt(argc, argv, "d:i:o:w:h:e:E:g:GX:x:Y:y:f:u:v:n:m:rcpD:H:sl:R:FTZ?CK:N")) != -1) {
         switch (opt) {
             case 'd': v4l2_device = optarg; break;
             case 'i': image_file = optarg; break;
@@ -235,6 +238,7 @@ int main(int argc, char **argv) {
             case 'R': cri_csv_input = optarg; break;
             case 'F': use_external_refs = 1; break;
             case 'T': show_colorimetry = 0; break;
+            case 'Z': gamut_mode = 1; break;
             case 'D': cfg.dest_width = atoi(optarg); break;
             case 'H': cfg.dest_height = atoi(optarg); break;
             case 'C': calibration_mode = 1; break;
@@ -246,6 +250,11 @@ int main(int argc, char **argv) {
     }
 
     colorimetry_set_use_external_refs(use_external_refs);
+
+    if (gamut_mode && !show_sdl) {
+        fprintf(stderr, "Gamut mode requires SDL display, enabling SDL.\n");
+        show_sdl = 1;
+    }
 
     if (calibration_mode && !show_sdl) {
         fprintf(stderr, "Calibration mode requires SDL display, enabling SDL.\n");
@@ -280,6 +289,12 @@ int main(int argc, char **argv) {
         }
         if (show_sdl) {
             dpy.show_colorimetry = show_colorimetry;
+            if (gamut_mode) {
+                if (sdl_display_enable_gamut_mode(&dpy, 320, 320) < 0) {
+                    fprintf(stderr, "Failed to enable gamut mode\n");
+                    gamut_mode = 0;
+                }
+            }
         }
     }
 
@@ -443,6 +458,43 @@ int main(int argc, char **argv) {
                     } else {
                         fprintf(stderr, "Failed to compute CRI/CCT from live data\n");
                     }
+                    fflush(stdout);
+                }
+
+                if (gamut_mode && (key_mask & SDL_KEYMASK_GAMUT_SAMPLE)) {
+                    int stage = -1;
+                    double x = 0.0;
+                    double y = 0.0;
+                    if (sdl_display_gamut_sample(&dpy, &ctx,
+                                                 &stage, &x, &y) == 0) {
+                        const char *label = stage == 0 ? "R"
+                                           : stage == 1 ? "G"
+                                           : stage == 2 ? "B" : "?";
+                        printf("\nGamut sample %s: x=%.4f y=%.4f\n",
+                               label, x, y);
+                        if (dpy.gamut_metrics_valid) {
+                            for (int i = 0; i < 3; i++) {
+                                int area_pct = (int)lround(
+                                    dpy.gamut_metrics[i].area_ratio * 100.0);
+                                int cov_pct = (int)lround(
+                                    dpy.gamut_metrics[i].coverage_ratio * 100.0);
+                                if (area_pct < 0) area_pct = 0;
+                                if (cov_pct < 0) cov_pct = 0;
+                                printf("%s A%d C%d\n",
+                                       i == 0 ? "sRGB" :
+                                       i == 1 ? "AdobeRGB" : "P3",
+                                       area_pct, cov_pct);
+                            }
+                        }
+                    } else {
+                        fprintf(stderr, "Failed to sample gamut data\n");
+                    }
+                    fflush(stdout);
+                }
+
+                if (gamut_mode && (key_mask & SDL_KEYMASK_GAMUT_RESET)) {
+                    sdl_display_gamut_reset(&dpy);
+                    printf("\nGamut samples reset\n");
                     fflush(stdout);
                 }
 
