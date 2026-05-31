@@ -1,10 +1,12 @@
 # Spectrometer
 
-A real-time spectrum analyzer for linux, using V4L2 and providing CSV/PPM output with SDL2-based real-time visualization.
+A real-time spectrum analyzer & CRI calculator for linux, using V4L2 and providing CSV/PPM output with SDL2-based real-time visualization. 
 
-本项目是”光度学与色度学“课程的课程项目。
+本项目是”光度学与色度学“[19003580]课程的课程项目。
 
 <img width="1920" height="940" alt="1" src="https://github.com/user-attachments/assets/a0826ecb-ac34-4427-93ea-020a5d5363f8" />
+
+<img width="1920" height="940" alt="3" src="https://github.com/user-attachments/assets/840e4e47-bc28-4ecd-b53d-5ec76d3e13c3" />
 
 ## Features
 
@@ -25,6 +27,7 @@ A real-time spectrum analyzer for linux, using V4L2 and providing CSV/PPM output
   - `s` — save spectrum snapshot (PPM + CSV)
   - `v` — trigger calibration (in `-C` mode) (specify the expected result in CLI)
   - `c` — compute CCT/CRI once and print to CLI
+  - `space` — pause/resume
 - **CSV export** for post-processing
 - **Headless mode** (`-s`) for automated/embedded operation
 
@@ -84,6 +87,7 @@ Options:
   -R <file>     Compute CRI/CCT from spectrum CSV and exit
   -F            Use external ref CSV files (ref/*.csv)
   -T            Disable CCT/Ra overlay on SDL
+  -Z            Gamut test mode (show color patch window)
   -D <px>       Dest graph width (default 1920)
   -H <px>       Dest graph height (default 1080)
   -?            This help
@@ -168,4 +172,4 @@ If `calibration.txt` is missing, the embedded calibration table is used.
 
 ## Notes
 
-This project was built and tested based on a homemade spectrometer model designed and sold by 窗台小圃, which can be found on platforms such as Taobao and Bilibili. The project references some logic of 窗台小圃's software, whose parts of the code were taken from by [Theremino Spectrometer](https://www.theremino.com/). However, no code from those two project was reused, as the those were developed using VB and DirectShow, among other tech stacks.
+This project was built and tested based on a homemade spectrometer model designed and sold by 窗台小圃, which can be found on platforms such as Taobao and Bilibili. The project references some logic of 窗台小圃's software, whose parts of the code were taken from by [Theremino Spectrometer](https://www.theremino.com/). However, no code from those two project was reused, as those were developed using VB and DirectShow, among other tech stacks.
