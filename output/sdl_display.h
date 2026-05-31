@@ -19,6 +19,9 @@
 #define COLORIMETRY_UPDATE_MODE COLORIMETRY_UPDATE_SYNC
 #define COLORIMETRY_FIXED_INTERVAL_MS 500
 
+#define GAMUT_STAGE_COUNT 3
+#define GAMUT_REF_COUNT 4
+
 #define MAX_PEAKS 10
 #define PEAK_RATIO 0.05f
 
@@ -51,9 +54,9 @@ typedef struct {
     int gamut_height;
     int gamut_stage;
     int gamut_samples;
-    double gamut_xy[3][2];
+    double gamut_xy[GAMUT_STAGE_COUNT][2];
     int gamut_metrics_valid;
-    GamutMetrics gamut_metrics[3];
+    GamutMetrics gamut_metrics[GAMUT_REF_COUNT];
 } SDLDisplay;
 
 int  sdl_display_init(SDLDisplay *dpy, int width, int spectrum_h);

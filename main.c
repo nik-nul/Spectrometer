@@ -114,6 +114,20 @@ static void make_calibration_base(char *out, size_t out_len) {
              tm_now.tm_sec);
 }
 
+static void make_gamut_base(char *out, size_t out_len) {
+    time_t now = time(NULL);
+    struct tm tm_now;
+    localtime_r(&now, &tm_now);
+    snprintf(out, out_len,
+             "gamut_%04d%02d%02d_%02d%02d%02d",
+             tm_now.tm_year + 1900,
+             tm_now.tm_mon +  1,
+             tm_now.tm_mday,
+             tm_now.tm_hour,
+             tm_now.tm_min,
+             tm_now.tm_sec);
+}
+
 static int prompt_calibration_points(const SpectrometerContext *ctx,
                                      CalibrationPoint *points,
                                      int max_points) {
@@ -205,6 +219,10 @@ int main(int argc, char **argv) {
     int use_calibration = 1;
     const char *calib_path = "calibration.txt";
     int calibrating = 0;
+    SpectrometerContext gamut_ctx[GAMUT_STAGE_COUNT];
+    int gamut_ctx_valid[GAMUT_STAGE_COUNT] = {0};
+    int gamut_pending_export = 0;
+    int gamut_exported = 0;
 
     SpectrometerConfig cfg;
     spec_init_config(&cfg);
@@ -397,6 +415,35 @@ int main(int argc, char **argv) {
                 sdl_display_render(&dpy, &ctx);
                 key_mask |= dpy.key_mask;
             }
+            if (gamut_mode && gamut_pending_export && show_sdl) {
+                if (!gamut_exported && dpy.gamut_metrics_valid) {
+                    char base[64];
+                    char ppm_path[96];
+                    char csv_path[96];
+                    make_gamut_base(base, sizeof(base));
+                    snprintf(ppm_path, sizeof(ppm_path),
+                             "%s_cie.ppm", base);
+                    if (sdl_display_save_ppm(&dpy, ppm_path) == 0) {
+                        printf("\nSaved gamut diagram: %s\n", ppm_path);
+                    } else {
+                        fprintf(stderr, "Failed to save gamut diagram\n");
+                    }
+
+                    const char *labels[GAMUT_STAGE_COUNT] = {"R", "G", "B"};
+                    for (int i = 0; i < GAMUT_STAGE_COUNT; i++) {
+                        if (!gamut_ctx_valid[i]) continue;
+                        snprintf(csv_path, sizeof(csv_path),
+                                 "%s_%s.csv", base, labels[i]);
+                        if (csv_write_spectrum(csv_path, &gamut_ctx[i], ',') == 0) {
+                            printf("Saved gamut spectrum: %s\n", csv_path);
+                        } else {
+                            fprintf(stderr, "Failed to save spectrum CSV\n");
+                        }
+                    }
+                    gamut_exported = 1;
+                }
+                gamut_pending_export = 0;
+            }
             if (key_mask) {
                 if (key_mask & SDL_KEYMASK_PAUSE) {
                     paused = !paused;
@@ -467,13 +514,17 @@ int main(int argc, char **argv) {
                     double y = 0.0;
                     if (sdl_display_gamut_sample(&dpy, &ctx,
                                                  &stage, &x, &y) == 0) {
+                        if (stage >= 0 && stage < GAMUT_STAGE_COUNT) {
+                            memcpy(&gamut_ctx[stage], &ctx, sizeof(ctx));
+                            gamut_ctx_valid[stage] = 1;
+                        }
                         const char *label = stage == 0 ? "R"
                                            : stage == 1 ? "G"
                                            : stage == 2 ? "B" : "?";
                         printf("\nGamut sample %s: x=%.4f y=%.4f\n",
                                label, x, y);
                         if (dpy.gamut_metrics_valid) {
-                            for (int i = 0; i < 3; i++) {
+                            for (int i = 0; i < GAMUT_REF_COUNT; i++) {
                                 int area_pct = (int)lround(
                                     dpy.gamut_metrics[i].area_ratio * 100.0);
                                 int cov_pct = (int)lround(
@@ -482,9 +533,13 @@ int main(int argc, char **argv) {
                                 if (cov_pct < 0) cov_pct = 0;
                                 printf("%s A%d C%d\n",
                                        i == 0 ? "sRGB" :
-                                       i == 1 ? "AdobeRGB" : "P3",
+                                       i == 1 ? "AdobeRGB" :
+                                       i == 2 ? "P3" : "NTSC",
                                        area_pct, cov_pct);
                             }
+                        }
+                        if (stage == GAMUT_STAGE_COUNT - 1) {
+                            gamut_pending_export = 1;
                         }
                     } else {
                         fprintf(stderr, "Failed to sample gamut data\n");
@@ -494,6 +549,11 @@ int main(int argc, char **argv) {
 
                 if (gamut_mode && (key_mask & SDL_KEYMASK_GAMUT_RESET)) {
                     sdl_display_gamut_reset(&dpy);
+                    for (int i = 0; i < GAMUT_STAGE_COUNT; i++) {
+                        gamut_ctx_valid[i] = 0;
+                    }
+                    gamut_pending_export = 0;
+                    gamut_exported = 0;
                     printf("\nGamut samples reset\n");
                     fflush(stdout);
                 }

@@ -8,8 +8,6 @@
 #include <ctype.h>
 #include <math.h>
 
-#define GAMUT_STAGE_COUNT 3
-#define GAMUT_REF_COUNT 3
 #define GAMUT_LOCUS_MAX 401
 
 typedef struct {
@@ -35,22 +33,31 @@ static const GamutPoint GAMUT_P3[GAMUT_STAGE_COUNT] = {
     {0.1500, 0.0600}
 };
 
+static const GamutPoint GAMUT_NTSC[GAMUT_STAGE_COUNT] = {
+    {0.6700, 0.3300},
+    {0.2100, 0.7100},
+    {0.1400, 0.0800}
+};
+
 static const GamutPoint *GAMUT_REFS[GAMUT_REF_COUNT] = {
     GAMUT_SRGB,
     GAMUT_ADOBE,
-    GAMUT_P3
+    GAMUT_P3,
+    GAMUT_NTSC
 };
 
 static const char *GAMUT_REF_LABELS[GAMUT_REF_COUNT] = {
     "SRGB",
     "ADOBE",
-    "P3"
+    "P3",
+    "NTSC"
 };
 
 static const uint8_t GAMUT_REF_COLORS[GAMUT_REF_COUNT][3] = {
     {220, 40, 40},
     {40, 140, 40},
-    {40, 80, 200}
+    {40, 80, 200},
+    {180, 120, 20}
 };
 
 static const uint8_t GAMUT_STAGE_COLORS[GAMUT_STAGE_COUNT][3] = {
@@ -309,6 +316,9 @@ static int glyph3x5(char c, uint8_t out[5]) {
             return 1;
         case 'K':
             if (out) { out[0] = 0x5; out[1] = 0x5; out[2] = 0x6; out[3] = 0x5; out[4] = 0x5; }
+            return 1;
+        case 'N':
+            if (out) { out[0] = 0x7; out[1] = 0x5; out[2] = 0x5; out[3] = 0x5; out[4] = 0x5; }
             return 1;
         case 'O':
             if (out) { out[0] = 0x7; out[1] = 0x5; out[2] = 0x5; out[3] = 0x5; out[4] = 0x7; }
@@ -1081,6 +1091,7 @@ void sdl_display_render(SDLDisplay *dpy,
                 dpy->gamut_window = NULL;
                 dpy->gamut_window_id = 0;
                 dpy->gamut_mode = 0;
+                dpy->running = 0;
             }
         }
         if (e.type == SDL_KEYDOWN) {
