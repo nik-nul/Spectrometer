@@ -30,6 +30,8 @@ A real-time spectrum analyzer & CRI calculator for linux, using V4L2 and providi
   - `space` — pause/resume
 - **CSV export** for post-processing
 - **Headless mode** (`-s`) for automated/embedded operation
+- **Gaumt Diagram** (`-Z`)
+- **ICC Profile Export** (`-Z`)
 
 ## Dependencies
 
@@ -88,9 +90,13 @@ Options:
   -F            Use external ref CSV files (ref/*.csv)
   -T            Disable CCT/Ra overlay on SDL
   -Z            Gamut test mode (show color patch window)
+  -I <file>     Write ICC profile (gamut mode, default basename.icc)
+  -J            ICC gamma 2.4 (default 2.2)
+  -U            ICC gamma 1.0 (native/linear)
   -D <px>       Dest graph width (default 1920)
   -H <px>       Dest graph height (default 1080)
   -?            This help
+
 ```
 
 ### Examples
@@ -99,6 +105,11 @@ Options:
 ```bash
 ./spectrometer -d /dev/video2
 # Press space to pause/resume.
+```
+
+**Get gaumt diagram and ICC profile:**
+```bash
+./spectrometer -d /dev/video2 -Z
 ```
 
 **Analyze a single PPM image and save CSV:**

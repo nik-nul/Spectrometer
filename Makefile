@@ -20,6 +20,7 @@ SRCS = main.c \
        $(LIBDIR)/wavelength.c \
 	$(LIBDIR)/calibration.c \
 	$(LIBDIR)/colorimetry.c \
+	$(LIBDIR)/icc.c \
        $(LIBDIR)/csv.c \
        $(INDIR)/v4l2.c \
        $(INDIR)/image_loader.c \

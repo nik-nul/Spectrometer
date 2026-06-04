@@ -15,6 +15,7 @@
 #include "lib/calibration.h"
 #include "lib/csv.h"
 #include "lib/colorimetry.h"
+#include "lib/icc.h"
 #include "input/v4l2.h"
 #include "input/image_loader.h"
 #include "output/sdl_display.h"
@@ -52,6 +53,9 @@ static void print_usage(const char *prog) {
     fprintf(stderr, "  -F            Use external ref CSV files (ref/*.csv)\n");
     fprintf(stderr, "  -T            Disable CCT/Ra overlay on SDL\n");
     fprintf(stderr, "  -Z            Gamut test mode (show color patch window)\n");
+    fprintf(stderr, "  -I <file>     Write ICC profile (gamut mode, default basename.icc)\n");
+    fprintf(stderr, "  -J            ICC gamma 2.4 (default 2.2)\n");
+    fprintf(stderr, "  -U            ICC gamma 1.0 (native/linear)\n");
     fprintf(stderr, "  -D <px>       Dest graph width (default 1920)\n");
     fprintf(stderr, "  -H <px>       Dest graph height (default 1080)\n");
     fprintf(stderr, "  -?            This help\n");
@@ -209,6 +213,8 @@ int main(int argc, char **argv) {
     int show_colorimetry = 1;
     int use_external_refs = 0;
     int gamut_mode = 0;
+    const char *icc_output = NULL;
+    double icc_gamma = 2.2;
     int cap_width = 1920, cap_height = 1080;
     int exposure = 201;
     int exposure_step = 100;
@@ -228,7 +234,7 @@ int main(int argc, char **argv) {
     spec_init_config(&cfg);
 
     int opt;
-    while ((opt = getopt(argc, argv, "d:i:o:w:h:e:E:g:GX:x:Y:y:f:u:v:n:m:rcpD:H:sl:R:FTZ?CK:N")) != -1) {
+    while ((opt = getopt(argc, argv, "d:i:o:w:h:e:E:g:GX:x:Y:y:f:u:v:n:m:rcpD:H:sl:R:FTZI:JU?CK:N")) != -1) {
         switch (opt) {
             case 'd': v4l2_device = optarg; break;
             case 'i': image_file = optarg; break;
@@ -257,6 +263,9 @@ int main(int argc, char **argv) {
             case 'F': use_external_refs = 1; break;
             case 'T': show_colorimetry = 0; break;
             case 'Z': gamut_mode = 1; break;
+            case 'I': icc_output = optarg; break;
+            case 'J': icc_gamma = 2.4; break;
+            case 'U': icc_gamma = 1.0; break;
             case 'D': cfg.dest_width = atoi(optarg); break;
             case 'H': cfg.dest_height = atoi(optarg); break;
             case 'C': calibration_mode = 1; break;
@@ -310,7 +319,7 @@ int main(int argc, char **argv) {
         if (show_sdl) {
             dpy.show_colorimetry = show_colorimetry;
             if (gamut_mode) {
-                if (sdl_display_enable_gamut_mode(&dpy, 320, 320) < 0) {
+                if (sdl_display_enable_gamut_mode(&dpy, 480, 480) < 0) {
                     fprintf(stderr, "Failed to enable gamut mode\n");
                     gamut_mode = 0;
                 }
@@ -418,10 +427,12 @@ int main(int argc, char **argv) {
                 key_mask |= dpy.key_mask;
             }
             if (gamut_mode && gamut_pending_export && show_sdl) {
-                if (!gamut_exported && dpy.gamut_metrics_valid) {
+                if (!gamut_exported && dpy.gamut_metrics_valid &&
+                    dpy.gamut_white_valid) {
                     char base[64];
                     char ppm_path[96];
                     char csv_path[96];
+                    char icc_path[96];
                     make_gamut_base(base, sizeof(base));
                     snprintf(ppm_path, sizeof(ppm_path),
                              "%s_cie.ppm", base);
@@ -441,6 +452,24 @@ int main(int argc, char **argv) {
                         } else {
                             fprintf(stderr, "Failed to save spectrum CSV\n");
                         }
+                    }
+                    const char *icc_target = icc_output;
+                    if (!icc_target || icc_target[0] == '\0') {
+                        snprintf(icc_path, sizeof(icc_path),
+                                 "%s.icc", base);
+                        icc_target = icc_path;
+                    }
+                    if (icc_write_display_profile(
+                            icc_target,
+                            dpy.gamut_xy[0][0], dpy.gamut_xy[0][1],
+                            dpy.gamut_xy[1][0], dpy.gamut_xy[1][1],
+                            dpy.gamut_xy[2][0], dpy.gamut_xy[2][1],
+                            dpy.gamut_white_xy[0], dpy.gamut_white_xy[1],
+                            icc_gamma,
+                            "Measured Display") == 0) {
+                        printf("Saved ICC profile: %s\n", icc_target);
+                    } else {
+                        fprintf(stderr, "Failed to write ICC profile\n");
                     }
                     gamut_exported = 1;
                 }
@@ -522,7 +551,8 @@ int main(int argc, char **argv) {
                         }
                         const char *label = stage == 0 ? "R"
                                            : stage == 1 ? "G"
-                                           : stage == 2 ? "B" : "?";
+                                           : stage == 2 ? "B"
+                                           : stage == GAMUT_WHITE_STAGE ? "W" : "?";
                         printf("\nGamut sample %s: x=%.4f y=%.4f\n",
                                label, x, y);
                         if (dpy.gamut_metrics_valid) {
@@ -540,7 +570,7 @@ int main(int argc, char **argv) {
                                        area_pct, cov_pct);
                             }
                         }
-                        if (stage == GAMUT_STAGE_COUNT - 1) {
+                        if (stage == GAMUT_SAMPLE_COUNT - 1) {
                             gamut_pending_export = 1;
                         }
                     } else {

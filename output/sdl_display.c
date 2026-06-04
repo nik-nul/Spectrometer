@@ -60,13 +60,18 @@ static const uint8_t GAMUT_REF_COLORS[GAMUT_REF_COUNT][3] = {
     {180, 120, 20}
 };
 
-static const uint8_t GAMUT_STAGE_COLORS[GAMUT_STAGE_COUNT][3] = {
+static const uint8_t GAMUT_STAGE_COLORS[GAMUT_SAMPLE_COUNT][3] = {
     {255, 0, 0},
     {0, 255, 0},
-    {0, 0, 255}
+    {0, 0, 255},
+    {255, 255, 255}
 };
 
-static const char *GAMUT_STAGE_LABELS[GAMUT_STAGE_COUNT] = {
+static const char *GAMUT_STAGE_LABELS[GAMUT_SAMPLE_COUNT] = {
+    "R", "G", "B", "W"
+};
+
+static const char *GAMUT_RGB_LABELS[GAMUT_STAGE_COUNT] = {
     "R", "G", "B"
 };
 
@@ -138,6 +143,7 @@ int sdl_display_init(SDLDisplay *dpy, int width, int spectrum_h) {
     dpy->gamut_height = 0;
     dpy->gamut_stage = 0;
     dpy->gamut_samples = 0;
+    dpy->gamut_white_valid = 0;
     dpy->gamut_metrics_valid = 0;
     return 0;
 }
@@ -182,6 +188,9 @@ void sdl_display_gamut_reset(SDLDisplay *dpy) {
         dpy->gamut_xy[i][0] = 0.0;
         dpy->gamut_xy[i][1] = 0.0;
     }
+    dpy->gamut_white_xy[0] = 0.0;
+    dpy->gamut_white_xy[1] = 0.0;
+    dpy->gamut_white_valid = 0;
     gamut_clear_metrics(dpy);
     gamut_set_stage(dpy, dpy->gamut_stage);
 }
@@ -192,7 +201,7 @@ int sdl_display_gamut_sample(SDLDisplay *dpy,
                              double *out_x,
                              double *out_y) {
     if (!dpy || !ctx || !dpy->gamut_mode) return -1;
-    if (dpy->gamut_stage >= GAMUT_STAGE_COUNT) return -1;
+    if (dpy->gamut_stage >= GAMUT_SAMPLE_COUNT) return -1;
 
     double x = 0.0;
     double y = 0.0;
@@ -201,9 +210,15 @@ int sdl_display_gamut_sample(SDLDisplay *dpy,
     }
 
     int stage = dpy->gamut_stage;
-    dpy->gamut_xy[stage][0] = x;
-    dpy->gamut_xy[stage][1] = y;
-    dpy->gamut_samples = stage + 1;
+    if (stage < GAMUT_STAGE_COUNT) {
+        dpy->gamut_xy[stage][0] = x;
+        dpy->gamut_xy[stage][1] = y;
+        dpy->gamut_samples = stage + 1;
+    } else if (stage == GAMUT_WHITE_STAGE) {
+        dpy->gamut_white_xy[0] = x;
+        dpy->gamut_white_xy[1] = y;
+        dpy->gamut_white_valid = 1;
+    }
     dpy->gamut_stage++;
     gamut_set_stage(dpy, dpy->gamut_stage);
 
@@ -385,6 +400,7 @@ static void draw_text3x5_scaled(uint8_t *pixels, int w, int h,
                                 const char *text,
                                 uint8_t r, uint8_t g, uint8_t b) {
     if (scale < 1) scale = 1;
+    if (!text) return;
     int digit_w = 3 * scale;
     int spacing = scale;
     int cursor = x;
@@ -607,7 +623,7 @@ static void gamut_compute_metrics(SDLDisplay *dpy) {
 static void gamut_set_stage(SDLDisplay *dpy, int stage) {
     if (!dpy || !dpy->gamut_window) return;
     const char *label = "DONE";
-    if (stage >= 0 && stage < GAMUT_STAGE_COUNT) {
+    if (stage >= 0 && stage < GAMUT_SAMPLE_COUNT) {
         label = GAMUT_STAGE_LABELS[stage];
     }
     char title[64];
@@ -618,7 +634,7 @@ static void gamut_set_stage(SDLDisplay *dpy, int stage) {
 static void gamut_render_patch(SDLDisplay *dpy) {
     if (!dpy || !dpy->gamut_window || !dpy->gamut_renderer) return;
     uint8_t r = 30, g = 30, b = 30;
-    if (dpy->gamut_stage >= 0 && dpy->gamut_stage < GAMUT_STAGE_COUNT) {
+    if (dpy->gamut_stage >= 0 && dpy->gamut_stage < GAMUT_SAMPLE_COUNT) {
         r = GAMUT_STAGE_COLORS[dpy->gamut_stage][0];
         g = GAMUT_STAGE_COLORS[dpy->gamut_stage][1];
         b = GAMUT_STAGE_COLORS[dpy->gamut_stage][2];
@@ -874,9 +890,23 @@ static void draw_gamut_diagram(SDLDisplay *dpy,
                       GAMUT_STAGE_COLORS[i][1],
                       GAMUT_STAGE_COLORS[i][2]);
             draw_text3x5_scaled(pixels, w, h, px + 6, py - 9, 3,
-                                GAMUT_STAGE_LABELS[i],
+                                GAMUT_RGB_LABELS[i],
                                 10, 10, 10);
         }
+    }
+
+    if (dpy->gamut_white_valid) {
+        int px = 0, py = 0;
+        plot_xy_to_px(left, top, right, bottom,
+                      x_min, x_max, y_min, y_max,
+                      dpy->gamut_white_xy[0], dpy->gamut_white_xy[1],
+                      &px, &py);
+        draw_line_thick(pixels, w, h, px - 3, py, px + 3, py,
+                        0, 0, 0, 2);
+        draw_line_thick(pixels, w, h, px, py - 3, px, py + 3,
+                        0, 0, 0, 2);
+        draw_text3x5_scaled(pixels, w, h, px + 6, py - 9, 3,
+                            "W", 10, 10, 10);
     }
 
     if (dpy->gamut_metrics_valid) {

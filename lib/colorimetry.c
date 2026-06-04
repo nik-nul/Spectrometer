@@ -646,7 +646,9 @@ int colorimetry_compute_xy_from_ctx(const SpectrometerContext *ctx,
     double X = 0.0, Y = 0.0, Z = 0.0;
     compute_xyz_from_spd(spd, &X, &Y, &Z, NULL);
     double sum = X + Y + Z;
-    if (sum <= 0.0) return -1;
+    if (sum <= 0.0) {
+        printf("Warning: Zero or negative sum in XYZ computation: %f\n", sum);
+    }
 
     xyz_to_xy(X, Y, Z, x, y);
     if (Y_out) *Y_out = Y;

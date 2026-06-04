@@ -21,6 +21,8 @@
 
 #define GAMUT_STAGE_COUNT 3
 #define GAMUT_REF_COUNT 4
+#define GAMUT_SAMPLE_COUNT 4
+#define GAMUT_WHITE_STAGE 3
 
 #define MAX_PEAKS 10
 #define PEAK_RATIO 0.05f
@@ -55,6 +57,8 @@ typedef struct {
     int gamut_stage;
     int gamut_samples;
     double gamut_xy[GAMUT_STAGE_COUNT][2];
+    double gamut_white_xy[2];
+    int gamut_white_valid;
     int gamut_metrics_valid;
     GamutMetrics gamut_metrics[GAMUT_REF_COUNT];
 } SDLDisplay;
