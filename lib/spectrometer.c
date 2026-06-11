@@ -239,20 +239,21 @@ void spec_process_frame(SpectrometerContext *ctx,
         }
     }
 
-    ctx->max_value = 80.0f;
-    ctx->max_value_x = 0;
-
     int i;
-    float v_acc = 0.0f;
+    
+    float v_acc = (ctx->src_dx > 0) ? ctx->spec_array[0] : 0.0f;
     for (i = 0; i < ctx->src_dx; i++) {
         float vnew = ctx->spec_array[i];
         v_acc += (vnew - v_acc) * ctx->kfilter;
         ctx->spec_array_filtered[i] = v_acc;
     }
 
-    v_acc = 0.0f;
+    ctx->max_value = -1e9f; 
+    ctx->max_value_x = 0;
+
+    v_acc = (ctx->src_dx > 0) ? ctx->spec_array_filtered[ctx->src_dx - 1] : 0.0f;
     for (i = ctx->src_dx - 1; i >= 0; i--) {
-        float vnew = ctx->spec_array[i];
+        float vnew = ctx->spec_array_filtered[i];
         v_acc += (vnew - v_acc) * ctx->kfilter;
         ctx->spec_array_filtered[i] = v_acc;
 
