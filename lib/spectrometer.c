@@ -3,8 +3,8 @@
 #include <math.h>
 #include <stdlib.h>
 
-static const float UV380_COEFF = 2.568f;
-static const float IR780_COEFF = 1.41f;
+// static const float UV380_COEFF = 2.568f;
+// static const float IR780_COEFF = 1.41f;
 static const float AVG_BG_NOISE = 2.2f;
 static const float MAX_V_DEFAULT = 800.0f;
 
@@ -282,18 +282,18 @@ void spec_process_frame(SpectrometerContext *ctx,
         float corrected;
 
         if (val - ctx->bg_noise >= 0) {
-            if (nm_int < IRRD_WAVELENGTH_START) {
-                corrected = (val - ctx->bg_noise) * UV380_COEFF;
-            } else if (nm_int <= IRRD_WAVELENGTH_END) {
+            // if (nm_int < IRRD_WAVELENGTH_START) {
+            //     corrected = (val - ctx->bg_noise) * UV380_COEFF;
+            // } else if (nm_int <= IRRD_WAVELENGTH_END) {
                 int idx = nm_int - IRRD_WAVELENGTH_START;
                 if (idx < 0) idx = 0;
                 if (idx >= IRRD_COEFF_COUNT)
                     idx = IRRD_COEFF_COUNT - 1;
                 corrected = (val - ctx->bg_noise)
                           * ctx->irradiance_coeff[idx];
-            } else {
-                corrected = val * IR780_COEFF;
-            }
+            // } else {
+            //     corrected = val * IR780_COEFF;
+            // }
             if (corrected > ctx->max_v)
                 corrected = ctx->max_v;
         } else {
